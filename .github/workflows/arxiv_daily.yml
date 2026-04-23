@@ -1,29 +1,64 @@
 name: 每日ArXiv论文中文日报
 on:
   schedule:
-    - cron: '0 1 * * *'  # 每日北京时间 09:00 自动执行
-  workflow_dispatch:  # 支持手动一键运行测试
+    - cron: '0 1 * * *'  # UTC 1点 = 北京时间早上9点自动发送
+  workflow_dispatch: # 支持手动一键测试
 
 jobs:
   run_daily_arxiv:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取代码
+      - name: 拉取项目完整代码
         uses: actions/checkout@v4
 
-      - name: 设置Python 3.12
-        uses: actions/setup-python@v5
+      - name: 配置最新Python3.12环境
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: 安装依赖
+      - name: 安装全部运行依赖
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 写入API密钥
-        run: |
-          echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" > .env
+      - name: 云端写入DeepSeek私密API密钥
+        run: echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" > .env
 
-      - name: 执行论文抓取与总结
+      - name: 抓取arXiv论文 + DeepSeek生成中文精简摘要
         run: python main.py
+
+      - name: 全自动发送日报到你的QQ邮箱
+        run: |
+          python <<EOF
+          import smtplib
+          from email.mime.text import MIMEText
+          from email.utils import formataddr
+          from datetime import datetime
+
+          # 读取GitHub云端加密邮箱配置
+          sender = "${{ secrets.EMAIL_FROM }}"
+          receiver = "${{ secrets.EMAIL_TO }}"
+          auth_code = "${{ secrets.EMAIL_AUTH_CODE }}"
+          today = datetime.now().strftime("%Y-%m-%d")
+
+          # 读取生成好的论文日报内容
+          try:
+              with open("data/daily_summary.md", "r", encoding="utf-8") as f:
+                  paper_content = f.read()
+          except:
+              paper_content = "今日暂无最新相关arXiv前沿论文更新"
+
+          # 配置邮件格式
+          mail_title = f"📅 {today} arXiv LLM/Agent 中文论文日报"
+          msg = MIMEText(paper_content, 'plain', 'utf-8')
+          msg['From'] = formataddr(('ArXiv论文订阅', sender))
+          msg['To'] = receiver
+          msg['Subject'] = mail_title
+
+          # QQ邮箱国内SMTP通道发送
+          smtp_server = smtplib.SMTP_SSL('smtp.qq.com', 465)
+          smtp_server.login(sender, auth_code)
+          smtp_server.sendmail(sender, receiver, msg.as_string())
+          smtp_server.quit()
+          print("✅ 邮箱论文日报推送成功！")
+          EOF
