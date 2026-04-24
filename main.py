@@ -57,27 +57,52 @@ def main():
         logger.info(text("\n步骤 2: 总结论文...", "\nStep 2: Summarizing papers..."))
         from src.summarizer.paper_summarizer import PaperSummarizer
         
+        # 初始化变量，防止LLM失败导致程序崩溃
+        summarized_papers = papers
+        summarizer = None
         try:
             summarizer = PaperSummarizer(config)
             summarized_papers = summarizer.summarize_papers(papers)
-            
-            # 生成每日报告 / Generate daily report
-            logger.info(text("\n生成每日报告...", "\nGenerating daily report..."))
-            report = summarizer.generate_daily_report(summarized_papers)
-            
-            # 保存报告 / Save report
-            report_path = f"data/summaries/report_{get_date_string()}.md"
-            from pathlib import Path
-            Path(report_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(report_path, 'w', encoding='utf-8') as f:
-                f.write(report)
-            logger.info(text(f"📄 每日报告已保存到: {report_path}", f"📄 Daily report saved to: {report_path}"))
-            
+            logger.info(text("✅ 论文总结完成", "✅ Paper summarization completed"))
         except Exception as e:
             logger.error(text(f"论文总结失败: {str(e)}", f"Paper summarization failed: {str(e)}"))
-            logger.info(text("继续执行后续步骤...", "Continuing with following steps..."))
-            summarized_papers = papers
+            logger.info(text("继续执行，将用原始论文生成报告...", "Continuing with raw paper info..."))
         
+        # --------------------------
+        # 🔴 把生成报告的代码移到try块外面，强制执行
+        # --------------------------
+        logger.info(text("\n生成每日报告...", "\nGenerating daily report..."))
+        # 即使LLM失败，也手动生成一个基础报告
+        if summarizer:
+            report = summarizer.generate_daily_report(summarized_papers)
+        else:
+            # 手动生成简易报告（防止LLM失败时没文件）
+            report = f"# {get_date_string()} arXiv 论文日报\n\n## 今日论文（LLM总结失败，显示原始信息）\n"
+            for paper in summarized_papers:
+                report += f"### {paper['title']}\n"
+                report += f"- 作者: {', '.join(paper['authors'])}\n"
+                report += f"- 分类: {paper['categories']}\n"
+                report += f"- 链接: {paper['pdf_url']}\n"
+                report += f"- 摘要: {paper['summary'][:300]}...\n\n"
+        
+        # 保存报告（强制创建目录）
+        report_path = f"data/summaries/report_{get_date_string()}.md"
+        from pathlib import Path
+        Path(report_path).parent.mkdir(parents=True, exist_ok=True)  # 强制创建data/summaries
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write(report)
+        logger.info(text(f"📄 每日报告已保存到: {report_path}", f"📄 Daily report saved to: {report_path}"))
+        
+        # --------------------------
+        # 🔴 新增：保存原始论文数据到data/papers/
+        # --------------------------
+        import json
+        papers_path = f"data/papers/papers_{get_date_string()}.json"
+        Path(papers_path).parent.mkdir(parents=True, exist_ok=True)  # 强制创建data/papers
+        with open(papers_path, 'w', encoding='utf-8') as f:
+            json.dump(papers, f, ensure_ascii=False, indent=2)
+        logger.info(text(f"📄 原始论文数据已保存到: {papers_path}", f"📄 Raw paper data saved to: {papers_path}"))
+                
         # 第四步 - 实现趋势分析 ✅ / Step 4 - Analyze trends
         logger.info(text("\n步骤 3: 分析研究趋势...", "\nStep 3: Analyzing research trends..."))
         try:
