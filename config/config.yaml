@@ -3,7 +3,7 @@
 # 应用配置 / App settings
 app:
   # 部署语言 / Deployment language: zh 或 en
-  language: "en"
+  language: "zh"
 
 # arXiv 搜索配置 / arXiv search settings
 arxiv:
