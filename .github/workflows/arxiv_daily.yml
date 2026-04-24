@@ -1,8 +1,12 @@
 name: 每日ArXiv论文中文日报
 on:
   schedule:
-    - cron: '0 1 * * *'  # UTC 1点 = 北京时间早上9点 自动运行
-  workflow_dispatch:     # 支持手动一键测试（最常用）
+    - cron: '0 1 * * *'  # UTC 1点 = 北京时间早上9点
+  workflow_dispatch:
+
+# 解决Node.js 20弃用警告
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run_daily_arxiv:
@@ -21,17 +25,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 写入 LLM 密钥（云端加密，绝不泄露）
+      - name: 写入DeepSeek密钥
         run: echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" > .env
 
-      - name: 运行主程序（爬论文 + AI总结 + 生成日报）
+      - name: 运行主程序
         run: python main.py
 
-      - name: 上传生成的所有报告文件（可下载查看）
+      # 🔴 新增调试步骤：列出所有文件，确认是否生成
+      - name: 查看生成的文件
+        run: |
+          echo "=== 项目根目录 ==="
+          ls -la
+          echo -e "\n=== data目录文件 ==="
+          ls -laR data/ || echo "data目录不存在"
+
+      - name: 上传报告文件
         uses: actions/upload-artifact@v4
         with:
           name: arxiv-daily-report
           path: |
-            data/summaries/    # AI总结+日报全部在这里
-            data/papers/       # 原始论文数据
-          retention-days: 30  # 文件保留30天
+            data/summaries/
+            data/papers/
+          retention-days: 30
