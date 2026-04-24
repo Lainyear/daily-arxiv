@@ -27,6 +27,12 @@ jobs:
       - name: 抓取arXiv论文 + DeepSeek生成中文精简摘要
         run: python main.py
 
+      # 🔴 新增：统一路径，方便邮件读取
+      - name: 复制报告到固定路径
+        run: |
+          # 把生成的带日期的报告复制成固定文件名，方便邮件读取
+          cp data/summaries/report_*.md data/daily_summary.md
+
       - name: 全自动发送日报到你的QQ邮箱
         run: |
           python <<EOF
@@ -41,11 +47,12 @@ jobs:
           auth_code = "${{ secrets.EMAIL_AUTH_CODE }}"
           today = datetime.now().strftime("%Y-%m-%d")
 
-          # 读取生成好的论文日报内容
+          # 读取生成好的论文日报内容（现在路径匹配了！）
           try:
               with open("data/daily_summary.md", "r", encoding="utf-8") as f:
                   paper_content = f.read()
-          except:
+          except Exception as e:
+              print(f"读取文件失败: {e}")
               paper_content = "今日暂无最新相关arXiv前沿论文更新"
 
           # 配置邮件格式
@@ -62,3 +69,13 @@ jobs:
           smtp_server.quit()
           print("✅ 邮箱论文日报推送成功！")
           EOF
+
+      # 🔴 新增：上传生成的报告到Actions Artifacts，跑完可以下载
+      - name: 上传日报文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-arxiv-report
+          path: |
+            data/summaries/
+            data/daily_summary.md
+          retention-days: 7  # 保留7天，方便你下载查看
