@@ -132,11 +132,67 @@ def main():
         logger.info(text("✅ 所有任务完成！", "✅ All tasks completed!"))
         logger.info("=" * 60)
         logger.info(text("提示: 运行 'python src/web/app.py' 启动 Web 服务查看结果", "Tip: run 'python src/web/app.py' to start the web service"))
+
+        send_arxiv_report_to_email()
         
     except Exception as e:
         logger.error(text(f"❌ 执行出错: {str(e)}", f"❌ Execution failed: {str(e)}"), exc_info=True)
         sys.exit(1)
 
+def send_arxiv_report_to_email():
+    """
+    读取生成的日报文件，发送到你的QQ邮箱
+    """
+    # 1. 从 .env 读取你配置的邮箱变量
+    load_dotenv()
+    sender = os.getenv("EMAIL_FROM")
+    receiver = os.getenv("EMAIL_TO")
+    auth_code = os.getenv("EMAIL_AUTH_CODE")
 
+    if not all([sender, receiver, auth_code]):
+        print("❌ 邮箱配置不完整，跳过发送邮件")
+        return
+
+    # 2. 配置 QQ 邮箱 SMTP 服务器
+    smtp_server = "smtp.qq.com"
+    smtp_port = 465
+
+    # 3. 创建邮件
+    msg = MIMEMultipart()
+    msg["From"] = sender
+    msg["To"] = receiver
+    msg["Subject"] = "📚 每日ArXiv论文中文日报"
+
+    # 邮件正文
+    body = "今日ArXiv论文日报已生成，附件包含：\n1. 中文总结报告 (Markdown格式)\n2. 原始论文数据 (JSON格式)"
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+
+    # 4. 自动查找并添加今天生成的文件作为附件
+    date_str = get_date_string() # 复用你代码里已有的日期函数
+    files_to_send = [
+        f"data/summaries/report_{date_str}.md",
+        f"data/papers/papers_{date_str}.json"
+    ]
+
+    for file_path in files_to_send:
+        if os.path.exists(file_path):
+            filename = os.path.basename(file_path)
+            with open(file_path, "rb") as f:
+                part = MIMEApplication(f.read(), Name=filename)
+            part["Content-Disposition"] = f'attachment; filename="{filename}"'
+            msg.attach(part)
+            print(f"✅ 已添加附件: {filename}")
+        else:
+            print(f"⚠️ 未找到文件: {file_path}")
+
+    # 5. 发送邮件
+    try:
+        server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+        server.login(sender, auth_code)
+        server.sendmail(sender, receiver, msg.as_string())
+        server.quit()
+        print("✅ 邮件发送成功！")
+    except Exception as e:
+        print(f"❌ 邮件发送失败: {e}")
 if __name__ == "__main__":
     main()
